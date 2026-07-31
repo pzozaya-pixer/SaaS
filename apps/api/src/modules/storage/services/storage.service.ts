@@ -1,7 +1,7 @@
 import { Injectable, OnModuleInit, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { LimitsService } from '../../billing/limits.service';
-import { S3Client, PutObjectCommand, DeleteObjectCommand, CreateBucketCommand, HeadBucketCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand, CreateBucketCommand, HeadBucketCommand, GetObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import * as crypto from 'crypto';
 
@@ -102,6 +102,35 @@ export class StorageService implements OnModuleInit {
     await this.decrementUsage(organizationId, 'storage_bytes', sizeBytes);
 
     return { success: true };
+  }
+
+  async listFiles(organizationId: string) {
+    const response = await this.s3Client.send(
+      new ListObjectsV2Command({
+        Bucket: this.bucketName,
+        Prefix: `${organizationId}/`,
+      }),
+    );
+
+    if (!response.Contents) {
+      return [];
+    }
+
+    return response.Contents.map((item) => {
+      const parts = item.Key?.split('/') || [];
+      const entityName = parts[1] || 'unknown';
+      const fileFullName = parts[2] || '';
+      const underscoreIdx = fileFullName.indexOf('_');
+      const originalName = underscoreIdx !== -1 ? fileFullName.substring(underscoreIdx + 1) : fileFullName;
+
+      return {
+        key: item.Key,
+        entityName,
+        originalName,
+        sizeBytes: item.Size || 0,
+        lastModified: item.LastModified,
+      };
+    });
   }
 
   private async decrementUsage(organizationId: string, metric: string, value: number) {

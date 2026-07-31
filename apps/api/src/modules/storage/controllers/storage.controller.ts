@@ -25,6 +25,11 @@ export class StorageController {
     return this.storageService.uploadFile(orgId, entityName, file);
   }
 
+  @Get('list')
+  async listFiles(@ActiveOrg() orgId: string) {
+    return this.storageService.listFiles(orgId);
+  }
+
   @Get('presign')
   async getPresignedUrl(@ActiveOrg() orgId: string, @Query('key') key: string) {
     if (!key) {
