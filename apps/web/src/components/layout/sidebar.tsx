@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Users, PawPrint, CalendarDays, Blocks, CreditCard, Sparkles, Shield, Zap, HardDrive } from 'lucide-react';
+import { LayoutDashboard, Users, PawPrint, CalendarDays, Blocks, CreditCard, Sparkles, Shield, Zap, HardDrive, FileText } from 'lucide-react';
 
 interface SidebarProps {
   activeTab: string;
@@ -60,6 +60,18 @@ export function Sidebar({ activeTab, setActiveTab, petResidenceActive }: Sidebar
           >
             <HardDrive className="w-4 h-4" />
             <span>Archivos y Adjuntos</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('forms')}
+            className={`flex items-center gap-3 w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+              activeTab === 'forms'
+                ? 'bg-primary text-primary-foreground shadow-md shadow-primary/10'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/50'
+            }`}
+          >
+            <FileText className="w-4 h-4" />
+            <span>Formularios</span>
           </button>
 
           {/* MENÚ CONDICIONAL POR PLUGINS */}
