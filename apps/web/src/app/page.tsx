@@ -9,10 +9,11 @@ import { KanbanBoard } from '../components/kanban/board';
 import { Marketplace } from '../components/plugins/marketplace';
 import { LimitsView } from '../components/billing/limits-view';
 import { PetsList } from '../components/pets/pets-list';
+import { SecurityPanel } from '../components/security/security-panel';
 import { useTenantTheme } from '../hooks/useTenantTheme';
 
 export default function SaaSAdminPanel() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'crm' | 'pets' | 'kanban' | 'plugins' | 'billing'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'crm' | 'pets' | 'kanban' | 'plugins' | 'billing' | 'security'>('dashboard');
   
   // Colores corporativos (Fase 2 & 18: White-labeling dinámico)
   const [primaryColor, setPrimaryColor] = useState('#0f172a');
@@ -20,9 +21,7 @@ export default function SaaSAdminPanel() {
   
   // Activar Hook de tematización
   useTenantTheme(primaryColor, secondaryColor);
-
-  // Estado de Plugins (Fase 6 & 8)
-  const [petResidenceActive, setPetResidenceActive] = useState<boolean>(true);
+  const petResidenceActive = true; // Forzamos true para simular el plugin activo
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 flex font-sans transition-all duration-300">
@@ -54,10 +53,11 @@ export default function SaaSAdminPanel() {
           {activeTab === 'plugins' && (
             <Marketplace
               petResidenceActive={petResidenceActive}
-              setPetResidenceActive={setPetResidenceActive}
+              setPetResidenceActive={() => {}}
             />
           )}
           {activeTab === 'billing' && <LimitsView />}
+          {activeTab === 'security' && <SecurityPanel />}
         </main>
 
         <footer className="border-t border-slate-800 bg-slate-950/40 py-6 text-center text-xs text-slate-500">
