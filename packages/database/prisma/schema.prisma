@@ -26,6 +26,7 @@ model User {
   assignedCenters  CenterUser[]
   ownedContacts    Contact[]
   pipelineRecords  PipelineRecord[]
+  auditLogs        AuditLog[]
 
   @@map("users")
 }
@@ -69,6 +70,7 @@ model Organization {
   automationRules         AutomationRule[]
   automationLogs          AutomationLog[]
   apiKeys                 ApiKey[]
+  auditLogs               AuditLog[]
 
   @@map("organizations")
 }
@@ -834,4 +836,36 @@ model ApiKey {
 
   @@index([organizationId])
   @@map("api_keys")
+}
+
+// =============================================================
+// MODELOS DE LA FASE 12: AUDITORÍA INTEGRAL
+// =============================================================
+
+model AuditLog {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  userId         String?      @map("user_id") @db.Uuid
+  
+  action         String       @db.VarChar(100)
+  entityName     String       @map("entity_name") @db.VarChar(100)
+  entityId       String?      @map("entity_id") @db.Uuid
+  
+  previousValues Json?        @map("previous_values")
+  newValues      Json?        @map("new_values")
+  
+  ipAddress      String?      @map("ip_address") @db.VarChar(45)
+  userAgent      String?      @map("user_agent") @db.Text
+  correlationId  String?      @map("correlation_id") @db.VarChar(100)
+  origin         String       @default("web") @db.VarChar(30)
+  pluginKey      String?      @map("plugin_key") @db.VarChar(100)
+  
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([entityName, entityId])
+  @@map("audit_logs")
 }
