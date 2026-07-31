@@ -2,11 +2,15 @@ import { Injectable, ConflictException, UnauthorizedException } from '@nestjs/co
 import { PrismaService } from '../database/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { EmailService } from '../email/email.service';
 import * as crypto from 'crypto';
 
 @Injectable()
 export class AuthService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly emailService: EmailService,
+  ) {}
 
   // -------------------------------------------------------------
   // SEGURIDAD / HASHING PBKDF2 NATIVO
@@ -43,7 +47,7 @@ export class AuthService {
     const passwordHash = this.hashPassword(dto.password, salt);
 
     // Registrar mediante transacción transaccional
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       // 1. Crear organización
       const org = await tx.organization.create({
         data: {
@@ -94,8 +98,27 @@ export class AuthService {
         email: user.email,
         organizationId: org.id,
         organizationSlug: org.slug,
+        firstName: user.firstName || '',
+        organizationName: org.name,
       };
     });
+
+    // Enviar correo de bienvenida asíncrono
+    try {
+      await this.emailService.sendWelcomeEmail(result.email, {
+        firstName: result.firstName,
+        organizationName: result.organizationName,
+      });
+    } catch (err) {
+      // Ignorar errores del encolador para no invalidar el registro
+    }
+
+    return {
+      userId: result.userId,
+      email: result.email,
+      organizationId: result.organizationId,
+      organizationSlug: result.organizationSlug,
+    };
   }
 
   // -------------------------------------------------------------

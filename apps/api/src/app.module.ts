@@ -17,6 +17,7 @@ import { PublicApiModule } from './modules/public-api/public-api.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { StorageModule } from './modules/storage/storage.module';
+import { EmailModule } from './modules/email/email.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { StorageModule } from './modules/storage/storage.module';
     AuditModule,
     AuthModule,
     StorageModule,
+    EmailModule,
   ],
   controllers: [AppController],
   providers: [AppService],
