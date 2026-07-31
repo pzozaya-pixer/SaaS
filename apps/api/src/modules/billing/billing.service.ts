@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { CreatePlanDto } from './dto/create-plan.dto';
 import { UpdatePlanDto } from './dto/update-plan.dto';
 import { SubscribeDto } from './dto/subscribe.dto';
+import Stripe from 'stripe';
 
 @Injectable()
 export class BillingService {
@@ -110,5 +111,88 @@ export class BillingService {
     }
 
     return subscription;
+  }
+
+  // -------------------------------------------------------------
+  // STRIPE WEBHOOK PROCESSING
+  // -------------------------------------------------------------
+
+  async handleStripeWebhook(rawBody: Buffer, signature: string): Promise<void> {
+    const stripeSecret = process.env.STRIPE_WEBHOOK_SECRET || 'whsec_mock';
+    const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_mock', {
+      apiVersion: '2024-04-10' as any,
+    });
+
+    let event: Stripe.Event;
+    try {
+      event = stripeClient.webhooks.constructEvent(rawBody, signature, stripeSecret);
+    } catch (err: any) {
+      throw new BadRequestException(`Webhook signature verification failed: ${err.message}`);
+    }
+
+    switch (event.type) {
+      case 'customer.subscription.created':
+      case 'customer.subscription.updated': {
+        const sub = event.data.object as any;
+        const orgId = sub.metadata?.organizationId;
+        const planId = sub.metadata?.planId;
+        
+        if (!orgId || !planId) {
+          break;
+        }
+
+        await this.prisma.subscription.upsert({
+          where: { organizationId: orgId },
+          create: {
+            organizationId: orgId,
+            planId,
+            status: sub.status,
+            billingCycle: 'monthly',
+            startDate: new Date(sub.start_date * 1000),
+            currentPeriodEnd: new Date(sub.current_period_end * 1000),
+            stripeSubscriptionId: sub.id,
+          },
+          update: {
+            planId,
+            status: sub.status,
+            currentPeriodEnd: new Date(sub.current_period_end * 1000),
+            stripeSubscriptionId: sub.id,
+          },
+        });
+        break;
+      }
+
+      case 'customer.subscription.deleted': {
+        const sub = event.data.object as any;
+        const orgId = sub.metadata?.organizationId;
+        if (orgId) {
+          await this.prisma.subscription.update({
+            where: { organizationId: orgId },
+            data: { status: 'canceled' },
+          });
+        }
+        break;
+      }
+
+      case 'invoice.payment_succeeded': {
+        const invoice = event.data.object as any;
+        const stripeSubId = typeof invoice.subscription === 'string' ? invoice.subscription : invoice.subscription?.id;
+
+        if (stripeSubId) {
+          const subscription = await this.prisma.subscription.findFirst({
+            where: { stripeSubscriptionId: stripeSubId },
+          });
+
+          if (subscription) {
+            // Reiniciar límites mensuales
+            await this.prisma.usageRecord.updateMany({
+              where: { organizationId: subscription.organizationId },
+              data: { value: BigInt(0) },
+            });
+          }
+        }
+        break;
+      }
+    }
   }
 }

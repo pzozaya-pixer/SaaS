@@ -1,10 +1,11 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Headers, Req, BadRequestException, RawBodyRequest } from '@nestjs/common';
 import { BillingService } from './billing.service';
 import { LimitsService } from './limits.service';
 import { CreatePlanDto } from './dto/create-plan.dto';
 import { UpdatePlanDto } from './dto/update-plan.dto';
 import { SubscribeDto } from './dto/subscribe.dto';
 import { ActiveOrg } from '../../common/decorators/active-org.decorator';
+import { Request } from 'express';
 
 @Controller('billing')
 export class BillingController {
@@ -54,5 +55,25 @@ export class BillingController {
   @Get('check-limit/:metric')
   checkLimit(@ActiveOrg() orgId: string, @Param('metric') metric: string) {
     return this.limitsService.checkLimit(orgId, metric);
+  }
+
+  // -------------------------------------------------------------
+  // STRIPE WEBHOOKS
+  // -------------------------------------------------------------
+
+  @Post('webhook')
+  async handleWebhook(
+    @Headers('stripe-signature') signature: string,
+    @Req() req: RawBodyRequest<Request>,
+  ) {
+    if (!signature) {
+      throw new BadRequestException('Missing stripe-signature header');
+    }
+    const rawBody = req.rawBody;
+    if (!rawBody) {
+      throw new BadRequestException('Raw body is required');
+    }
+    await this.billingService.handleStripeWebhook(rawBody, signature);
+    return { received: true };
   }
 }
