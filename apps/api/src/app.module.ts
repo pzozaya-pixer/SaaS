@@ -19,6 +19,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { StorageModule } from './modules/storage/storage.module';
 import { EmailModule } from './modules/email/email.module';
 import { DataExportModule } from './modules/data-export/data-export.module';
+import { DataImportModule } from './modules/data-import/data-import.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { DataExportModule } from './modules/data-export/data-export.module';
     StorageModule,
     EmailModule,
     DataExportModule,
+    DataImportModule,
   ],
   controllers: [AppController],
   providers: [AppService],

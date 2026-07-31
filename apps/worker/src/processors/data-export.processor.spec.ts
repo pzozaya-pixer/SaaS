@@ -22,6 +22,8 @@ describe('DataExportProcessor (Background Worker)', () => {
   const mockPrisma = {
     contact: {
       findMany: jest.fn().mockResolvedValue(mockContacts),
+      findFirst: jest.fn(),
+      create: jest.fn(),
     },
   };
 
@@ -63,5 +65,48 @@ describe('DataExportProcessor (Background Worker)', () => {
     });
 
     expect((processor as any).s3Client.send).toHaveBeenCalled();
+  });
+
+  it('should process import_contacts job, parse CSV and insert contacts', async () => {
+    // Mock S3 GetObject response body with CSV string
+    const csvContent = [
+      'Type,First Name,Last Name,Company Name,Email,Phone',
+      'PERSON,Bruce,Wayne,,bruce@wayne.com,123456',
+      'COMPANY,,,Oscorp Inc.,info@oscorp.com,999',
+      'PERSON,,Invalid-LastName,,,', // Falla porque no tiene First Name
+    ].join('\n');
+
+    (processor as any).s3Client.send = jest.fn().mockImplementation((command) => {
+      if (command.constructor.name === 'GetObjectCommand') {
+        return Promise.resolve({
+          Body: {
+            transformToString: jest.fn().mockResolvedValue(csvContent),
+          },
+        });
+      }
+      return Promise.resolve({});
+    });
+
+    mockPrisma.contact.findFirst.mockResolvedValue(null); // No duplicados
+    mockPrisma.contact.create.mockResolvedValue({});
+
+    const job = {
+      id: 'job-import-999',
+      name: 'import_contacts',
+      data: {
+        organizationId: 'org-1',
+        fileKey: 'org-1/imports/temp_999.csv',
+      },
+    } as any;
+
+    const result = await processor.process(job);
+
+    expect(result.success).toBe(true);
+    expect(result.importedCount).toBe(2); // Bruce y Oscorp
+    expect(result.skippedCount).toBe(1); // Fila inválida
+    expect(result.errors.length).toBe(1);
+    expect(result.errors[0].message).toContain('First name is required');
+
+    expect(mockPrisma.contact.create).toHaveBeenCalledTimes(2);
   });
 });

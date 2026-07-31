@@ -2,7 +2,7 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 
 @Processor('data-jobs')
 @Injectable()
@@ -30,13 +30,11 @@ export class DataExportProcessor extends WorkerHost {
     const { organizationId } = job.data;
 
     if (job.name === 'export_contacts') {
-      // 1. Obtener los contactos del inquilino desde base de datos
       const contacts = await this.prisma.contact.findMany({
         where: { organizationId },
         orderBy: { createdAt: 'desc' },
       });
 
-      // 2. Generar el formato CSV
       const headers = ['ID', 'Type', 'First Name', 'Last Name', 'Company Name', 'Email', 'Phone', 'Created At'];
       const rows = contacts.map(c => [
         c.id,
@@ -57,7 +55,6 @@ export class DataExportProcessor extends WorkerHost {
       const buffer = Buffer.from(csvContent, 'utf-8');
       const key = `${organizationId}/exports/contacts_${job.id}.csv`;
 
-      // 3. Subir archivo a MinIO/S3
       await this.s3Client.send(
         new PutObjectCommand({
           Bucket: this.bucketName,
@@ -69,6 +66,129 @@ export class DataExportProcessor extends WorkerHost {
 
       this.logger.log(`Contacts export finished successfully. Key: ${key}`);
       return { success: true, key };
+    }
+
+    if (job.name === 'import_contacts') {
+      const { fileKey } = job.data;
+
+      // 1. Descargar el archivo temporal desde S3/MinIO
+      const response = await this.s3Client.send(
+        new GetObjectCommand({
+          Bucket: this.bucketName,
+          Key: fileKey,
+        }),
+      );
+
+      const csvContent = await response.Body?.transformToString('utf-8');
+      if (!csvContent) {
+        throw new Error(`CSV file body is empty for key: ${fileKey}`);
+      }
+
+      // 2. Parsear el archivo línea por línea
+      const lines = csvContent.split(/\r?\n/).filter(line => line.trim().length > 0);
+      if (lines.length <= 1) {
+        return { success: true, importedCount: 0, skippedCount: 0, errors: [] };
+      }
+
+      const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+      const emailIdx = headers.indexOf('Email');
+      const firstNameIdx = headers.indexOf('First Name');
+      const lastNameIdx = headers.indexOf('Last Name');
+      const companyNameIdx = headers.indexOf('Company Name');
+      const typeIdx = headers.indexOf('Type');
+      const phoneIdx = headers.indexOf('Phone');
+
+      let importedCount = 0;
+      let skippedCount = 0;
+      const errors: Array<{ row: number; message: string }> = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        const rowNum = i + 1;
+        const line = lines[i];
+
+        // Parseador simple de CSV que maneja comillas dobles opcionales
+        const values = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => v.trim().replace(/^"|"$/g, '').replace(/""/g, '"'));
+
+        const type = typeIdx !== -1 ? values[typeIdx] : 'PERSON';
+        const firstName = firstNameIdx !== -1 ? values[firstNameIdx] : '';
+        const lastName = lastNameIdx !== -1 ? values[lastNameIdx] : '';
+        const companyName = companyNameIdx !== -1 ? values[companyNameIdx] : '';
+        const email = emailIdx !== -1 ? values[emailIdx] : '';
+        const phone = phoneIdx !== -1 ? values[phoneIdx] : '';
+
+        // Validaciones
+        if (!type || (type !== 'PERSON' && type !== 'COMPANY')) {
+          errors.push({ row: rowNum, message: `Type must be PERSON or COMPANY (received: "${type}")` });
+          skippedCount++;
+          continue;
+        }
+
+        if (type === 'PERSON' && !firstName) {
+          errors.push({ row: rowNum, message: 'First name is required for PERSON contacts' });
+          skippedCount++;
+          continue;
+        }
+
+        if (type === 'COMPANY' && !companyName) {
+          errors.push({ row: rowNum, message: 'Company name is required for COMPANY contacts' });
+          skippedCount++;
+          continue;
+        }
+
+        if (email && !email.includes('@')) {
+          errors.push({ row: rowNum, message: 'Invalid email format' });
+          skippedCount++;
+          continue;
+        }
+
+        if (email) {
+          const duplicate = await this.prisma.contact.findFirst({
+            where: { organizationId, email },
+          });
+          if (duplicate) {
+            errors.push({ row: rowNum, message: `Email ${email} is already in use by another contact` });
+            skippedCount++;
+            continue;
+          }
+        }
+
+        try {
+          await this.prisma.contact.create({
+            data: {
+              organizationId,
+              type,
+              firstName: type === 'PERSON' ? firstName : null,
+              lastName: type === 'PERSON' ? lastName : null,
+              companyName: type === 'COMPANY' ? companyName : null,
+              email: email || null,
+              phone: phone || null,
+            },
+          });
+          importedCount++;
+        } catch (dbErr: any) {
+          errors.push({ row: rowNum, message: `Database insert failed: ${dbErr.message}` });
+          skippedCount++;
+        }
+      }
+
+      // 3. Eliminar el archivo temporal de MinIO
+      try {
+        await this.s3Client.send(
+          new DeleteObjectCommand({
+            Bucket: this.bucketName,
+            Key: fileKey,
+          }),
+        );
+      } catch (delErr) {
+        this.logger.error(`Failed to delete temporary S3 file ${fileKey}:`, delErr);
+      }
+
+      return {
+        success: true,
+        importedCount,
+        skippedCount,
+        errors,
+      };
     }
 
     throw new Error(`Unsupported job type: ${job.name}`);
