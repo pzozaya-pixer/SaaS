@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { User, Building2, Plus, Mail, Phone, MapPin } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { User, Building2, Plus, Mail, Phone, MapPin, Download, Upload, Loader2 } from 'lucide-react';
 
 interface Contact {
   id: string;
@@ -20,6 +20,9 @@ interface Center {
 
 export function ContactsList() {
   const [filter, setFilter] = useState<'ALL' | 'CLIENT' | 'PROVIDER' | 'PROSPECT'>('ALL');
+  const [isExporting, setIsExporting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [contacts] = useState<Contact[]>([
     { id: '1', name: 'Laura Martínez', type: 'PERSON', email: 'laura@example.com', phone: '612 345 678', role: 'Cliente' },
@@ -40,6 +43,60 @@ export function ContactsList() {
     if (filter === 'PROSPECT') return c.role === 'Prospecto';
     return true;
   });
+
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const token = localStorage.getItem('token') || 'mock-session-token-32-chars-long';
+      const res = await fetch('http://localhost:4000/api/v1/data-export/contacts', {
+        method: 'POST',
+        headers: {
+          'x-organization-id': 'org-1',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      if (!res.ok) throw new Error('Failed to start export');
+      const data = await res.json();
+      alert(`Exportación encolada con éxito. ID de Tarea: ${data.jobId}. Se te notificará en tiempo real cuando esté lista.`);
+    } catch (err: any) {
+      alert(`Error al exportar: ${err.message}`);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsImporting(true);
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const token = localStorage.getItem('token') || 'mock-session-token-32-chars-long';
+      const res = await fetch('http://localhost:4000/api/v1/data-import/contacts', {
+        method: 'POST',
+        headers: {
+          'x-organization-id': 'org-1',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formData,
+      });
+      if (!res.ok) throw new Error('Failed to upload file');
+      const data = await res.json();
+      alert(`Importación encolada con éxito. ID de Tarea: ${data.jobId}. Se te notificará en tiempo real en cuanto termine el procesamiento.`);
+    } catch (err: any) {
+      alert(`Error al importar: ${err.message}`);
+    } finally {
+      setIsImporting(false);
+      if (e.target) e.target.value = '';
+    }
+  };
 
   return (
     <div className="space-y-8 animate-fade-in">
@@ -97,31 +154,60 @@ export function ContactsList() {
             <p className="text-xs text-slate-400">Gestión unificada de clientes, proveedores y prospectos</p>
           </div>
           
-          <div className="flex gap-1.5 bg-slate-900 p-1 rounded-xl border border-slate-800">
-            <button
-              onClick={() => setFilter('ALL')}
-              className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${filter === 'ALL' ? 'bg-primary text-primary-foreground' : 'text-slate-400 hover:text-slate-200'}`}
-            >
-              Todos
-            </button>
-            <button
-              onClick={() => setFilter('CLIENT')}
-              className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${filter === 'CLIENT' ? 'bg-primary text-primary-foreground' : 'text-slate-400 hover:text-slate-200'}`}
-            >
-              Clientes
-            </button>
-            <button
-              onClick={() => setFilter('PROVIDER')}
-              className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${filter === 'PROVIDER' ? 'bg-primary text-primary-foreground' : 'text-slate-400 hover:text-slate-200'}`}
-            >
-              Proveedores
-            </button>
-            <button
-              onClick={() => setFilter('PROSPECT')}
-              className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${filter === 'PROSPECT' ? 'bg-primary text-primary-foreground' : 'text-slate-400 hover:text-slate-200'}`}
-            >
-              Prospectos
-            </button>
+          <div className="flex items-center gap-4">
+            {/* BOTONES ACCIONES DE DATOS (Fases 17 & 18) */}
+            <div className="flex gap-2 bg-slate-900/60 p-1 rounded-xl border border-slate-800">
+              <input
+                type="file"
+                accept=".csv"
+                ref={fileInputRef}
+                onChange={handleImportFile}
+                className="hidden"
+              />
+              <button
+                onClick={handleImportClick}
+                disabled={isImporting}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-300 hover:bg-slate-800/70 text-xs font-semibold transition"
+              >
+                {isImporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5 text-blue-400" />}
+                <span>Importar CSV</span>
+              </button>
+              <button
+                onClick={handleExport}
+                disabled={isExporting}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-300 hover:bg-slate-800/70 text-xs font-semibold transition"
+              >
+                {isExporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5 text-emerald-400" />}
+                <span>Exportar CSV</span>
+              </button>
+            </div>
+
+            <div className="flex gap-1.5 bg-slate-900 p-1 rounded-xl border border-slate-800">
+              <button
+                onClick={() => setFilter('ALL')}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${filter === 'ALL' ? 'bg-primary text-primary-foreground' : 'text-slate-400 hover:text-slate-200'}`}
+              >
+                Todos
+              </button>
+              <button
+                onClick={() => setFilter('CLIENT')}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${filter === 'CLIENT' ? 'bg-primary text-primary-foreground' : 'text-slate-400 hover:text-slate-200'}`}
+              >
+                Clientes
+              </button>
+              <button
+                onClick={() => setFilter('PROVIDER')}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${filter === 'PROVIDER' ? 'bg-primary text-primary-foreground' : 'text-slate-400 hover:text-slate-200'}`}
+              >
+                Proveedores
+              </button>
+              <button
+                onClick={() => setFilter('PROSPECT')}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${filter === 'PROSPECT' ? 'bg-primary text-primary-foreground' : 'text-slate-400 hover:text-slate-200'}`}
+              >
+                Prospectos
+              </button>
+            </div>
           </div>
         </div>
 
