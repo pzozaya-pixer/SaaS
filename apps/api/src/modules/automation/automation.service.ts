@@ -69,6 +69,14 @@ export class AutomationService {
     });
   }
 
+  async findAllLogs(orgId: string) {
+    return this.prisma.automationLog.findMany({
+      where: { organizationId: orgId },
+      include: { rule: true },
+      orderBy: { executedAt: 'desc' },
+    });
+  }
+
   // -------------------------------------------------------------
   // WORKFLOW ENGINE & EVENT DISPATCHING (ASÍNCRONO CON BULLMQ)
   // -------------------------------------------------------------

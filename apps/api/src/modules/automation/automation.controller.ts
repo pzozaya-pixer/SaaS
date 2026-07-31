@@ -33,6 +33,11 @@ export class AutomationController {
     return this.automationService.removeRule(orgId, id);
   }
 
+  @Get('logs')
+  findAllLogs(@ActiveOrg() orgId: string) {
+    return this.automationService.findAllLogs(orgId);
+  }
+
   @Post('trigger/:trigger')
   triggerEvent(@ActiveOrg() orgId: string, @Param('trigger') trigger: string, @Body() payload: any) {
     return this.automationService.triggerEvent(orgId, trigger, payload);
