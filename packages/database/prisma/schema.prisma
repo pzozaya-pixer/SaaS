@@ -1,0 +1,754 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// -------------------------------------------------------------
+// Identidad y Usuarios
+// -------------------------------------------------------------
+model User {
+  id           String             @id @default(uuid()) @db.Uuid
+  email        String             @unique @db.VarChar(255)
+  passwordHash String?            @map("password_hash") @db.Text
+  firstName    String?            @map("first_name") @db.VarChar(120)
+  lastName     String?            @map("last_name") @db.VarChar(120)
+  isActive     Boolean            @default(true) @map("is_active")
+  createdAt    DateTime           @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime           @updatedAt @map("updated_at") @db.Timestamptz
+
+  organizations    OrganizationUser[]
+  userRoles        UserRole[]
+  sessions         Session[]
+  assignedCenters  CenterUser[]
+  ownedContacts    Contact[]
+  pipelineRecords  PipelineRecord[]
+
+  @@map("users")
+}
+
+// -------------------------------------------------------------
+// Organizaciones (Tenants)
+// -------------------------------------------------------------
+model Organization {
+  id             String             @id @default(uuid()) @db.Uuid
+  name           String             @db.VarChar(200)
+  slug           String             @unique @db.VarChar(200)
+  logoUrl        String?            @map("logo_url") @db.Text
+  faviconUrl     String?            @map("favicon_url") @db.Text
+  primaryColor   String             @default("#0f172a") @map("primary_color") @db.VarChar(7) // HEX corporativo
+  secondaryColor String             @default("#3b82f6") @map("secondary_color") @db.VarChar(7) // HEX corporativo
+  status         String             @default("active") @db.VarChar(30) // active, suspended, pending_payment
+  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime           @updatedAt @map("updated_at") @db.Timestamptz
+
+  users                   OrganizationUser[]
+  roles                   Role[]
+  userRoles               UserRole[]
+  centers                 Center[]
+  centerUsers             CenterUser[]
+  contacts                Contact[]
+  contactRelations        ContactRelation[]
+  customEntityDefinitions CustomEntityDefinition[]
+  customFieldDefinitions  CustomFieldDefinition[]
+  customEntityRecords     CustomEntityRecord[]
+  formDefinitions         FormDefinition[]
+  formSubmissions         FormSubmission[]
+  pipelineDefinitions     PipelineDefinition[]
+  pipelineStages          PipelineStage[]
+  pipelineRecords         PipelineRecord[]
+  reportDefinitions       ReportDefinition[]
+  dashboards              Dashboard[]
+  dashboardWidgets        DashboardWidget[]
+  tenantPlugins           TenantPlugin[]
+  subscription            Subscription?
+  usageRecords            UsageRecord[]
+
+  @@map("organizations")
+}
+
+// -------------------------------------------------------------
+// Relación N:M Usuarios y Organizaciones
+// -------------------------------------------------------------
+model OrganizationUser {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  userId         String       @map("user_id") @db.Uuid
+  isOwner        Boolean      @default(false) @map("is_owner")
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@map("organization_users")
+}
+
+// -------------------------------------------------------------
+// Roles (RBAC) - Pueden ser globales (isSystem=true) o del tenant
+// -------------------------------------------------------------
+model Role {
+  id             String           @id @default(uuid()) @db.Uuid
+  name           String           @db.VarChar(100)
+  description    String?          @db.VarChar(255)
+  organizationId String?          @map("organization_id") @db.Uuid // null para roles globales del sistema
+  isSystem       Boolean          @default(false) @map("is_system")
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization   Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  permissions    RolePermission[]
+  userRoles      UserRole[]
+
+  @@unique([organizationId, name]) // El nombre del rol es único dentro de la organización
+  @@map("roles")
+}
+
+// -------------------------------------------------------------
+// Permisos granulares
+// -------------------------------------------------------------
+model Permission {
+  id          String           @id @default(uuid()) @db.Uuid
+  action      String           @unique @db.VarChar(100) // e.g. 'customers.view', 'pipelines.manage'
+  resource    String           @db.VarChar(100) // e.g. 'customers', 'pipelines'
+  description String?          @db.VarChar(255)
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime         @updatedAt @map("updated_at") @db.Timestamptz
+
+  roles       RolePermission[]
+
+  @@map("permissions")
+}
+
+// -------------------------------------------------------------
+// Tabla intermedia Roles <-> Permisos
+// -------------------------------------------------------------
+model RolePermission {
+  id           String     @id @default(uuid()) @db.Uuid
+  roleId       String     @map("role_id") @db.Uuid
+  permissionId String     @map("permission_id") @db.Uuid
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz
+
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+// -------------------------------------------------------------
+// Asignación de Roles a Usuarios dentro de una Organización
+// -------------------------------------------------------------
+model UserRole {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  userId         String       @map("user_id") @db.Uuid
+  roleId         String       @map("role_id") @db.Uuid
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role           Role         @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId, roleId])
+  @@map("user_roles")
+}
+
+// -------------------------------------------------------------
+// Control de Sesiones
+// -------------------------------------------------------------
+model Session {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  token     String   @unique @db.Text
+  userAgent String?  @map("user_agent") @db.Text
+  ipAddress String?  @map("ip_address") @db.VarChar(45)
+  isActive  Boolean  @default(true) @map("is_active")
+  expiresAt DateTime @map("expires_at") @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+// =============================================================
+// MODELOS DE LA FASE 2: CRM BASE
+// =============================================================
+
+// -------------------------------------------------------------
+// Centros, sedes o delegaciones
+// -------------------------------------------------------------
+model Center {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  name           String       @db.VarChar(150)
+  address        String?      @db.VarChar(255)
+  latitude       Float?
+  longitude      Float?
+  phone          String?      @db.VarChar(50)
+  email          String?      @db.VarChar(150)
+  schedule       Json?        // Estructura JSON para horarios de apertura/cierre
+  status         String       @default("active") @db.VarChar(30) // active, inactive
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  users          CenterUser[]
+  contacts       Contact[]
+  pipelines      PipelineDefinition[]
+
+  @@index([organizationId])
+  @@map("centers")
+}
+
+// -------------------------------------------------------------
+// Relación N:M Usuarios asignados a Centros
+// -------------------------------------------------------------
+model CenterUser {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  centerId       String       @map("center_id") @db.Uuid
+  userId         String       @map("user_id") @db.Uuid
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  center         Center       @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([centerId, userId])
+  @@index([organizationId])
+  @@map("center_users")
+}
+
+// -------------------------------------------------------------
+// Contactos (Clientes, Proveedores, Prospectos, Contactos)
+// -------------------------------------------------------------
+model Contact {
+  id             String            @id @default(uuid()) @db.Uuid
+  organizationId String            @map("organization_id") @db.Uuid
+  centerId       String?           @map("center_id") @db.Uuid // Centro preferido o asignado
+  type           String            @db.VarChar(20) // PERSON, COMPANY
+  
+  // Roles de negocio del contacto (Flags booleanos para evitar duplicidad)
+  isClient       Boolean           @default(false) @map("is_client")
+  isProvider     Boolean           @default(false) @map("is_provider")
+  isProspect     Boolean           @default(false) @map("is_prospect")
+  
+  // Datos personales (si type === PERSON)
+  firstName      String?           @map("first_name") @db.VarChar(120)
+  lastName       String?           @map("last_name") @db.VarChar(120)
+  
+  // Datos comerciales (si type === COMPANY)
+  companyName    String?           @map("company_name") @db.VarChar(200)
+  taxId          String?           @map("tax_id") @db.VarChar(50) // NIF, CIF, RUT
+  
+  email          String?           @db.VarChar(255)
+  phone          String?           @db.VarChar(50)
+  website        String?           @db.VarChar(255)
+  notes          String?           @db.Text
+  tags           String[]          @default([]) // Soporte Postgres nativo de arrays
+  customFields   Json?             @map("custom_fields") // Almacenamiento híbrido para campos configurables
+  
+  ownerId        String?           @map("owner_id") @db.Uuid // Usuario responsable del contacto
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime          @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  center         Center?           @relation(fields: [centerId], references: [id], onDelete: SetNull)
+  owner          User?             @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  
+  addresses      Address[]
+  sourceRelations ContactRelation[] @relation("SourceContact")
+  targetRelations ContactRelation[] @relation("TargetContact")
+  pipelineRecords PipelineRecord[]
+
+  @@index([organizationId])
+  @@index([email])
+  @@index([taxId])
+  @@map("contacts")
+}
+
+// -------------------------------------------------------------
+// Direcciones de un Contacto
+// -------------------------------------------------------------
+model Address {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  contactId      String       @map("contact_id") @db.Uuid
+  type           String       @default("main") @db.VarChar(30) // main, billing, shipping
+  street         String       @db.VarChar(255)
+  city           String       @db.VarChar(150)
+  state          String?      @db.VarChar(150)
+  postalCode     String?      @map("postal_code") @db.VarChar(30)
+  country        String       @db.VarChar(100)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+
+  contact        Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("addresses")
+}
+
+// -------------------------------------------------------------
+// Relaciones entre Contactos (Ej. Persona -> Empleado -> Empresa)
+// -------------------------------------------------------------
+model ContactRelation {
+  id              String       @id @default(uuid()) @db.Uuid
+  organizationId  String       @map("organization_id") @db.Uuid
+  sourceContactId String       @map("source_contact_id") @db.Uuid
+  targetContactId String       @map("target_contact_id") @db.Uuid
+  relationType    String       @map("relation_type") @db.VarChar(50) // EMPLOYEE_OF, SPOUSE_OF, etc.
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sourceContact   Contact      @relation("SourceContact", fields: [sourceContactId], references: [id], onDelete: Cascade)
+  targetContact   Contact      @relation("TargetContact", fields: [targetContactId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceContactId, targetContactId, relationType])
+  @@index([organizationId])
+  @@map("contact_relations")
+}
+
+// =============================================================
+// MODELOS DE LA FASE 3: CUSTOM ENTITIES, FIELDS & FORMS
+// =============================================================
+
+// -------------------------------------------------------------
+// Definición de Entidades Personalizadas por Organización
+// -------------------------------------------------------------
+model CustomEntityDefinition {
+  id                String       @id @default(uuid()) @db.Uuid
+  organizationId    String       @map("organization_id") @db.Uuid
+  nameSingular      String       @map("name_singular") @db.VarChar(100)
+  namePlural        String       @map("name_plural") @db.VarChar(100)
+  internalName      String       @map("internal_name") @db.VarChar(100) // ej: "pet", "repair"
+  icon              String?      @db.VarChar(50)
+  description       String?      @db.VarChar(255)
+  status            String       @default("active") @db.VarChar(30) // active, inactive
+  
+  mainFieldId       String?      @map("main_field_id") @db.Uuid // ID del campo principal descriptor
+  autoNumberFormat  String?      @map("auto_number_format") @db.VarChar(50) // ej: "PET-{0000}"
+  currentAutoNumber Int          @default(1) @map("current_auto_number")
+  
+  isVisibleInMenu   Boolean      @default(true) @map("is_visible_in_menu")
+  allowFiles        Boolean      @default(true) @map("allow_files")
+  allowActivities   Boolean      @default(true) @map("allow_activities")
+  allowComments     Boolean      @default(true) @map("allow_comments")
+  allowPipelines    Boolean      @default(false) @map("allow_pipelines")
+  allowTags         Boolean      @default(true) @map("allow_tags")
+  allowImportExport Boolean      @default(true) @map("allow_import_export")
+  allowApi          Boolean      @default(true) @map("allow_api")
+  allowPublicForms  Boolean      @default(false) @map("allow_public_forms")
+  
+  ownerPluginId     String?      @map("owner_plugin_id") @db.VarChar(100) // Si fue creado por un plugin
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  fields            CustomFieldDefinition[]
+  records           CustomEntityRecord[]
+  forms             FormDefinition[]
+  pipelines         PipelineDefinition[]
+  reports           ReportDefinition[]
+
+  @@unique([organizationId, internalName])
+  @@index([organizationId])
+  @@map("custom_entity_definitions")
+}
+
+// -------------------------------------------------------------
+// Definición de Campos Configurables
+// -------------------------------------------------------------
+model CustomFieldDefinition {
+  id                       String                  @id @default(uuid()) @db.Uuid
+  organizationId           String                  @map("organization_id") @db.Uuid
+  targetEntity             String                  @map("target_entity") @db.VarChar(50) // "CONTACT", "CENTER", "CUSTOM_ENTITY"
+  customEntityDefinitionId String?                 @map("custom_entity_definition_id") @db.Uuid // null si targetEntity es del sistema
+  
+  label                    String                  @db.VarChar(150)
+  internalName             String                  @map("internal_name") @db.VarChar(100) // ej: "age", "diet_plan"
+  description              String?                 @db.VarChar(255)
+  type                     String                  @db.VarChar(50) // TEXT, NUMBER, DATE, SELECT, FILE, etc.
+  defaultValue             String?                 @map("default_value") @db.Text
+  
+  isRequired               Boolean                 @default(false) @map("is_required")
+  isUnique                 Boolean                 @default(false) @map("is_unique")
+  isIndexable              Boolean                 @default(false) @map("is_indexable")
+  isSearchable             Boolean                 @default(true) @map("is_searchable")
+  isFilterable             Boolean                 @default(true) @map("is_filterable")
+  isSortable               Boolean                 @default(true) @map("is_sortable")
+  
+  validationRegex          String?                 @map("validation_regex") @db.VarChar(255)
+  options                  Json?                   // Array de opciones para listas/selectores
+  conditionalRules         Json?                   // Reglas condicionales de visibilidad
+  permissions              Json?                   // Permisos de lectura/escritura por rol
+  section                  String?                 @db.VarChar(100) // Agrupación en el formulario
+  pluginOwner              String?                 @map("plugin_owner") @db.VarChar(100)
+
+  createdAt                DateTime                @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                DateTime                @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization             Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customEntityDefinition   CustomEntityDefinition? @relation(fields: [customEntityDefinitionId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, targetEntity, customEntityDefinitionId, internalName])
+  @@index([organizationId])
+  @@map("custom_field_definitions")
+}
+
+// -------------------------------------------------------------
+// Registro / Fila de una Entidad Personalizada
+// -------------------------------------------------------------
+model CustomEntityRecord {
+  id                       String                 @id @default(uuid()) @db.Uuid
+  organizationId           String                 @map("organization_id") @db.Uuid
+  customEntityDefinitionId String                 @map("custom_entity_definition_id") @db.Uuid
+  autoNumberValue          String?                @map("auto_number_value") @db.VarChar(50) // ej: "PET-0001"
+  values                   Json                   // Valores en formato JSONB { "age": 5, "breed": "Labrador" }
+  createdAt                DateTime               @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                DateTime               @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization             Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  definition               CustomEntityDefinition @relation(fields: [customEntityDefinitionId], references: [id], onDelete: Cascade)
+  pipelineRecords          PipelineRecord[]
+
+  @@index([organizationId])
+  @@index([customEntityDefinitionId])
+  @@map("custom_entity_records")
+}
+
+// -------------------------------------------------------------
+// Definición de Formularios
+// -------------------------------------------------------------
+model FormDefinition {
+  id                       String                  @id @default(uuid()) @db.Uuid
+  organizationId           String                  @map("organization_id") @db.Uuid
+  name                     String                  @db.VarChar(150)
+  description              String?                 @db.VarChar(255)
+  targetEntity             String                  @map("target_entity") @db.VarChar(50) // "CONTACT", "CUSTOM_ENTITY"
+  customEntityDefinitionId String?                 @map("custom_entity_definition_id") @db.Uuid
+  
+  structure                Json                    // Estructura visual: pestañas, secciones y orden de campos
+  conditionalRules         Json?                   @map("conditional_rules") // Reglas dinámicas en frontend
+  
+  isPublic                 Boolean                 @default(false) @map("is_public")
+  publicToken              String?                 @unique @map("public_token") @db.VarChar(100)
+  isCaptchaEnabled         Boolean                 @default(false) @map("is_captcha_enabled")
+  consents                 Json?                   // Consentimientos de privacidad/Términos
+  expirationDate           DateTime?               @map("expiration_date") @db.Timestamptz
+  successMessage           String?                 @map("success_message") @db.VarChar(255)
+  redirectUrl              String?                 @map("redirect_url") @db.VarChar(255)
+  webhooks                 Json?                   // Eventos HTTP tras envío exitoso
+
+  createdAt                DateTime                @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                DateTime                @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization             Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customEntityDefinition   CustomEntityDefinition? @relation(fields: [customEntityDefinitionId], references: [id], onDelete: Cascade)
+  submissions              FormSubmission[]
+
+  @@index([organizationId])
+  @@map("form_definitions")
+}
+
+// -------------------------------------------------------------
+// Respuestas / Envíos de Formularios
+// -------------------------------------------------------------
+model FormSubmission {
+  id               String         @id @default(uuid()) @db.Uuid
+  organizationId   String         @map("organization_id") @db.Uuid
+  formDefinitionId String         @map("form_definition_id") @db.Uuid
+  data             Json           // Valores de la respuesta del formulario
+  ipAddress        String?        @map("ip_address") @db.VarChar(45)
+  userAgent        String?        @map("user_agent") @db.Text
+  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz
+
+  organization     Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  form             FormDefinition @relation(fields: [formDefinitionId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([formDefinitionId])
+  @@map("form_submissions")
+}
+
+// =============================================================
+// MODELOS DE LA FASE 4: PIPELINES CONFIGURABLES
+// =============================================================
+
+// -------------------------------------------------------------
+// Definición del Pipeline por Organización
+// -------------------------------------------------------------
+model PipelineDefinition {
+  id                       String                  @id @default(uuid()) @db.Uuid
+  organizationId           String                  @map("organization_id") @db.Uuid
+  name                     String                  @db.VarChar(150)
+  targetEntity             String                  @map("target_entity") @db.VarChar(50) // "CONTACT", "CUSTOM_ENTITY"
+  customEntityDefinitionId String?                 @map("custom_entity_definition_id") @db.Uuid
+  icon                     String?                 @db.VarChar(50)
+  centerId                 String?                 @map("center_id") @db.Uuid // Opcional: restricción por centro
+  createdAt                DateTime                @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                DateTime                @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization             Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customEntityDefinition   CustomEntityDefinition? @relation(fields: [customEntityDefinitionId], references: [id], onDelete: Cascade)
+  center                   Center?                 @relation(fields: [centerId], references: [id], onDelete: SetNull)
+  stages                   PipelineStage[]
+  records                  PipelineRecord[]
+
+  @@index([organizationId])
+  @@map("pipeline_definitions")
+}
+
+// -------------------------------------------------------------
+// Etapas de un Pipeline
+// -------------------------------------------------------------
+model PipelineStage {
+  id                   String             @id @default(uuid()) @db.Uuid
+  organizationId       String             @map("organization_id") @db.Uuid
+  pipelineDefinitionId String             @map("pipeline_definition_id") @db.Uuid
+  name                 String             @db.VarChar(100)
+  order                Int                @default(0) // Secuencia de las etapas
+  color                String?            @db.VarChar(7) // HEX color
+  
+  isWon                Boolean            @default(false) @map("is_won") // Indica etapa ganada
+  isLost               Boolean            @default(false) @map("is_lost") // Indica etapa perdida
+  probability          Int?               // Probabilidad estimada (%)
+  targetDays           Int?               @map("target_days") // Tiempo objetivo en días
+  
+  // Validación de transición (campos que deben estar obligatoriamente llenos)
+  requiredFields       Json?              @map("required_fields") // Array de strings con internalNames
+  transitionRules      Json?              @map("transition_rules") // Reglas complejas en formato JSON
+  
+  createdAt            DateTime           @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime           @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization         Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pipeline             PipelineDefinition @relation(fields: [pipelineDefinitionId], references: [id], onDelete: Cascade)
+  records              PipelineRecord[]
+
+  @@index([organizationId])
+  @@index([pipelineDefinitionId])
+  @@map("pipeline_stages")
+}
+
+// -------------------------------------------------------------
+// Tarjetas / Registros dentro del Pipeline
+// -------------------------------------------------------------
+model PipelineRecord {
+  id                       String             @id @default(uuid()) @db.Uuid
+  organizationId           String             @map("organization_id") @db.Uuid
+  pipelineDefinitionId     String             @map("pipeline_definition_id") @db.Uuid
+  pipelineStageId          String             @map("pipeline_stage_id") @db.Uuid
+  
+  title                    String             @db.VarChar(200)
+  description              String?            @db.Text
+  ownerId                  String?            @map("owner_id") @db.Uuid // Responsable de la tarjeta
+  contactId                String?            @map("contact_id") @db.Uuid // Cliente/Contacto relacionado
+  customEntityRecordId     String?            @map("custom_entity_record_id") @db.Uuid // Registro personalizado (si aplica)
+  
+  amount                   Decimal?           @db.Decimal(12, 2)
+  probability              Int?
+  expectedCloseDate        DateTime?          @map("expected_close_date") @db.Timestamptz
+  tags                     String[]           @default([])
+  lossReason               String?            @map("loss_reason") @db.VarChar(255) // Justificación si etapa es perdida
+  
+  // Tiempos acumulados en segundos: { "stage_id_1": 12000, "stage_id_2": 45000 }
+  stageDurations           Json?              @map("stage_durations")
+  lastStageChangeAt        DateTime           @default(now()) @map("last_stage_change_at") @db.Timestamptz
+
+  createdAt                DateTime           @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                DateTime           @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization             Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pipeline                 PipelineDefinition @relation(fields: [pipelineDefinitionId], references: [id], onDelete: Cascade)
+  stage                    PipelineStage      @relation(fields: [pipelineStageId], references: [id], onDelete: Restrict)
+  owner                    User?              @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  contact                  Contact?           @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  customEntityRecord       CustomEntityRecord? @relation(fields: [customEntityRecordId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([pipelineDefinitionId])
+  @@index([pipelineStageId])
+  @@map("pipeline_records")
+}
+
+// =============================================================
+// MODELOS DE LA FASE 5: INFORMES Y DASHBOARDS
+// =============================================================
+
+// -------------------------------------------------------------
+// Definición de Informes por Organización
+// -------------------------------------------------------------
+model ReportDefinition {
+  id                       String                  @id @default(uuid()) @db.Uuid
+  organizationId           String                  @map("organization_id") @db.Uuid
+  name                     String                  @db.VarChar(150)
+  description              String?                 @db.VarChar(255)
+  
+  // Fuentes de datos: "CONTACT", "CUSTOM_ENTITY", "PIPELINE_RECORD", "CENTER"
+  source                   String                  @db.VarChar(50)
+  customEntityDefinitionId String?                 @map("custom_entity_definition_id") @db.Uuid
+  
+  // Configuración del informe (métricas, dimensiones, filtros, tipo de gráfico)
+  config                   Json
+  isSystem                 Boolean                 @default(false) @map("is_system")
+  
+  createdAt                DateTime                @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                DateTime                @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization             Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customEntityDefinition   CustomEntityDefinition? @relation(fields: [customEntityDefinitionId], references: [id], onDelete: Cascade)
+  widgets                  DashboardWidget[]
+
+  @@index([organizationId])
+  @@map("report_definitions")
+}
+
+// -------------------------------------------------------------
+// Dashboards
+// -------------------------------------------------------------
+model Dashboard {
+  id             String            @id @default(uuid()) @db.Uuid
+  organizationId String            @map("organization_id") @db.Uuid
+  name           String            @db.VarChar(150)
+  description    String?           @db.VarChar(255)
+  userId         String?           @map("user_id") @db.Uuid // null si es compartido, o ID si es privado de un usuario
+  config         Json?             // Filtros globales del dashboard
+  isDefault      Boolean           @default(false) @map("is_default")
+  
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime          @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  widgets        DashboardWidget[]
+
+  @@index([organizationId])
+  @@map("dashboards")
+}
+
+// -------------------------------------------------------------
+// Widgets dentro de un Dashboard
+// -------------------------------------------------------------
+model DashboardWidget {
+  id               String            @id @default(uuid()) @db.Uuid
+  organizationId   String            @map("organization_id") @db.Uuid
+  dashboardId      String            @map("dashboard_id") @db.Uuid
+  reportId         String?           @map("report_id") @db.Uuid // null para widgets estáticos o alertas sin informe
+  
+  title            String            @db.VarChar(150)
+  type             String            @db.VarChar(50) // "KPI", "CHART", "FUNNEL", "ALERT"
+  
+  // Parámetros de disposición { "x": 0, "y": 0, "w": 4, "h": 3, "color": "#000" }
+  config           Json
+  
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  dashboard        Dashboard         @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+  report           ReportDefinition? @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([dashboardId])
+  @@map("dashboard_widgets")
+}
+
+// =============================================================
+// MODELOS DE LA FASE 6: SISTEMA DE PLUGINS Y EXTENSIONES
+// =============================================================
+
+// -------------------------------------------------------------
+// Plugins activados por Organización (Tenant)
+// -------------------------------------------------------------
+model TenantPlugin {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  pluginKey      String       @map("plugin_key") @db.VarChar(100) // ej: "pet-residence", "billing-addon"
+  isActive       Boolean      @default(true) @map("is_active")
+  config         Json?        // Parámetros específicos de configuración del plugin
+  
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, pluginKey])
+  @@index([organizationId])
+  @@map("tenant_plugins")
+}
+
+// =============================================================
+// MODELOS DE LA FASE 7: SUSCRIPCIONES Y LÍMITES DE USO
+// =============================================================
+
+// -------------------------------------------------------------
+// Planes de Suscripción de la plataforma
+// -------------------------------------------------------------
+model SubscriptionPlan {
+  id            String         @id @default(uuid()) @db.Uuid
+  name          String         @db.VarChar(100)
+  description   String?        @db.VarChar(255)
+  priceMonthly  Decimal        @map("price_monthly") @db.Decimal(10, 2)
+  priceYearly   Decimal        @map("price_yearly") @db.Decimal(10, 2)
+  limits        Json
+  features      String[]       @default([])
+  isActive      Boolean        @default(true) @map("is_active")
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+
+  subscriptions Subscription[]
+
+  @@map("subscription_plans")
+}
+
+// -------------------------------------------------------------
+// Suscripción Activa de una Organización
+// -------------------------------------------------------------
+model Subscription {
+  id                   String           @id @default(uuid()) @db.Uuid
+  organizationId       String           @unique @map("organization_id") @db.Uuid
+  planId               String           @map("plan_id") @db.Uuid
+  status               String           @db.VarChar(30) // "active", "canceled", "past_due", "trialing"
+  billingCycle         String           @map("billing_cycle") @db.VarChar(20) // "monthly", "yearly"
+  
+  startDate            DateTime         @map("start_date") @db.Timestamptz
+  currentPeriodEnd     DateTime         @map("current_period_end") @db.Timestamptz
+  trialEnd             DateTime?        @map("trial_end") @db.Timestamptz
+  cancelAtPeriodEnd    Boolean          @default(false) @map("cancel_at_period_end")
+  
+  stripeSubscriptionId String?          @unique @map("stripe_subscription_id") @db.VarChar(255)
+
+  createdAt            DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime         @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization         Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan                 SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId])
+  @@map("subscriptions")
+}
+
+// -------------------------------------------------------------
+// Registro de Uso para contadores mensuales
+// -------------------------------------------------------------
+model UsageRecord {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  metric         String       @db.VarChar(50) // "storage_bytes", "automation_runs", "api_calls"
+  value          BigInt       @default(0)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, metric])
+  @@index([organizationId])
+  @@map("usage_records")
+}

@@ -1,0 +1,33 @@
+import { Module } from '@nestjs/common';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+import { DatabaseModule } from './modules/database/database.module';
+import { CentersModule } from './modules/centers/centers.module';
+import { ContactsModule } from './modules/contacts/contacts.module';
+import { CustomFieldsModule } from './modules/custom-fields/custom-fields.module';
+import { CustomEntitiesModule } from './modules/custom-entities/custom-entities.module';
+import { FormsModule } from './modules/forms/forms.module';
+import { PipelinesModule } from './modules/pipelines/pipelines.module';
+import { ReportingModule } from './modules/reporting/reporting.module';
+import { DashboardsModule } from './modules/dashboards/dashboards.module';
+import { PluginsModule } from './modules/plugins/plugins.module';
+import { BillingModule } from './modules/billing/billing.module';
+
+@Module({
+  imports: [
+    DatabaseModule,
+    CentersModule,
+    ContactsModule,
+    CustomFieldsModule,
+    CustomEntitiesModule,
+    FormsModule,
+    PipelinesModule,
+    ReportingModule,
+    DashboardsModule,
+    PluginsModule,
+    BillingModule,
+  ],
+  controllers: [AppController],
+  providers: [AppService],
+})
+export class AppModule {}
