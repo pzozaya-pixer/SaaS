@@ -6,6 +6,10 @@ describe('AutomationService (Engine and Webhooks)', () => {
   let service: AutomationService;
   let prisma: PrismaService;
 
+  const mockQueue = {
+    add: jest.fn().mockResolvedValue({ id: 'job-1' }),
+  };
+
   const mockRule = {
     id: 'rule-1',
     organizationId: 'org-1',
@@ -47,19 +51,15 @@ describe('AutomationService (Engine and Webhooks)', () => {
           provide: PrismaService,
           useValue: mockPrisma,
         },
+        {
+          provide: 'BullQueue_webhooks', // Token que usa NestJS internamente para la cola 'webhooks'
+          useValue: mockQueue,
+        },
       ],
     }).compile();
 
     service = module.get<AutomationService>(AutomationService);
     prisma = module.get<PrismaService>(PrismaService);
-
-    // Mock de fetch global para evitar llamadas HTTP reales en los tests
-    global.fetch = jest.fn().mockImplementation(() =>
-      Promise.resolve({
-        ok: true,
-        status: 200,
-      })
-    ) as any;
   });
 
   it('should match and evaluate equal condition successfully', () => {
@@ -74,20 +74,20 @@ describe('AutomationService (Engine and Webhooks)', () => {
     expect(match).toBe(false);
   });
 
-  it('should execute webhook and log success when conditions match', async () => {
+  it('should enqueue webhook job and log pending status when conditions match', async () => {
     const payload = { role: 'Cliente', name: 'Laura' };
     await service.triggerEvent('org-1', 'contact.created', payload);
 
-    expect(global.fetch).toHaveBeenCalledWith(
-      'https://test-webhook.com/api',
-      expect.objectContaining({
-        method: 'POST',
-        headers: expect.objectContaining({
-          'Content-Type': 'application/json',
-          'X-SaaS-Signature': expect.any(String),
-        }),
-        body: JSON.stringify(payload),
-      })
+    expect(mockQueue.add).toHaveBeenCalledWith(
+      'send_webhook',
+      {
+        logId: 'log-1',
+        url: 'https://test-webhook.com/api',
+        secret: 'supersecret',
+        payload,
+        ruleId: 'rule-1',
+      },
+      expect.any(Object)
     );
 
     expect(mockPrisma.automationLog.create).toHaveBeenCalledWith({
@@ -95,16 +95,16 @@ describe('AutomationService (Engine and Webhooks)', () => {
         organizationId: 'org-1',
         ruleId: 'rule-1',
         eventPayload: payload,
-        status: 'success',
+        status: 'pending',
       },
     });
   });
 
-  it('should not run rule if trigger matches but conditions fail', async () => {
+  it('should not enqueue job if trigger matches but conditions fail', async () => {
     const payload = { role: 'Proveedor', name: 'Vet Sur' };
     await service.triggerEvent('org-1', 'contact.created', payload);
 
-    expect(global.fetch).not.toHaveBeenCalled();
+    expect(mockQueue.add).not.toHaveBeenCalled();
     expect(mockPrisma.automationLog.create).not.toHaveBeenCalled();
   });
 });

@@ -2,11 +2,15 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { CreateRuleDto } from './dto/create-rule.dto';
 import { UpdateRuleDto } from './dto/update-rule.dto';
-import * as crypto from 'crypto';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 
 @Injectable()
 export class AutomationService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @InjectQueue('webhooks') private readonly webhookQueue: Queue,
+  ) {}
 
   // -------------------------------------------------------------
   // AUTOMATION RULES CRUD
@@ -66,7 +70,7 @@ export class AutomationService {
   }
 
   // -------------------------------------------------------------
-  // WORKFLOW ENGINE & EVENT DISPATCHING
+  // WORKFLOW ENGINE & EVENT DISPATCHING (ASÍNCRONO CON BULLMQ)
   // -------------------------------------------------------------
 
   async triggerEvent(orgId: string, eventTrigger: string, payload: any): Promise<void> {
@@ -84,30 +88,35 @@ export class AutomationService {
 
       const actions = rule.actions as any[];
       for (const action of actions) {
-        try {
-          if (action.type === 'send_webhook') {
-            await this.executeWebhook(action.config.url, action.config.secret, payload);
-          }
-          // Registrar log de éxito
-          await this.prisma.automationLog.create({
+        if (action.type === 'send_webhook') {
+          // 1. Registrar log en estado pendiente
+          const log = await this.prisma.automationLog.create({
             data: {
               organizationId: orgId,
               ruleId: rule.id,
               eventPayload: payload,
-              status: 'success',
+              status: 'pending',
             },
           });
-        } catch (err: any) {
-          // Registrar log de fallo
-          await this.prisma.automationLog.create({
-            data: {
-              organizationId: orgId,
+
+          // 2. Encolar asíncronamente en BullMQ
+          await this.webhookQueue.add(
+            'send_webhook',
+            {
+              logId: log.id,
+              url: action.config.url,
+              secret: action.config.secret,
+              payload,
               ruleId: rule.id,
-              eventPayload: payload,
-              status: 'failed',
-              error: err instanceof Error ? err.message : String(err),
             },
-          });
+            {
+              attempts: 3, // 3 intentos máximos
+              backoff: {
+                type: 'exponential',
+                delay: 5000, // Reintento exponencial partiendo de 5s
+              },
+            },
+          );
         }
       }
     }
@@ -131,25 +140,5 @@ export class AutomationService {
       return Number(fieldValue) < Number(value);
     }
     return true;
-  }
-
-  private async executeWebhook(url: string, secret: string, payload: any): Promise<void> {
-    const signature = crypto
-      .createHmac('sha256', secret)
-      .update(JSON.stringify(payload))
-      .digest('hex');
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-SaaS-Signature': signature,
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Webhook failed with status ${response.status}`);
-    }
   }
 }
