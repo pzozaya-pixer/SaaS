@@ -15,6 +15,7 @@ import { BillingModule } from './modules/billing/billing.module';
 import { AutomationModule } from './modules/automation/automation.module';
 import { PublicApiModule } from './modules/public-api/public-api.module';
 import { AuditModule } from './modules/audit/audit.module';
+import { AuthModule } from './modules/auth/auth.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { AuditModule } from './modules/audit/audit.module';
     AutomationModule,
     PublicApiModule,
     AuditModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],
