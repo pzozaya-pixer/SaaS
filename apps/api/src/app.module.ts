@@ -12,6 +12,7 @@ import { ReportingModule } from './modules/reporting/reporting.module';
 import { DashboardsModule } from './modules/dashboards/dashboards.module';
 import { PluginsModule } from './modules/plugins/plugins.module';
 import { BillingModule } from './modules/billing/billing.module';
+import { AutomationModule } from './modules/automation/automation.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { BillingModule } from './modules/billing/billing.module';
     DashboardsModule,
     PluginsModule,
     BillingModule,
+    AutomationModule,
   ],
   controllers: [AppController],
   providers: [AppService],

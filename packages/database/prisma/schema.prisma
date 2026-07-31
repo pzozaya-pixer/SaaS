@@ -66,6 +66,8 @@ model Organization {
   tenantPlugins           TenantPlugin[]
   subscription            Subscription?
   usageRecords            UsageRecord[]
+  automationRules         AutomationRule[]
+  automationLogs          AutomationLog[]
 
   @@map("organizations")
 }
@@ -751,4 +753,59 @@ model UsageRecord {
   @@unique([organizationId, metric])
   @@index([organizationId])
   @@map("usage_records")
+}
+
+// =============================================================
+// MODELOS DE LA FASE 10: MOTOR DE AUTOMATIZACIONES Y WEBHOOKS
+// =============================================================
+
+// -------------------------------------------------------------
+// Reglas de Automatización configuradas por el usuario
+// -------------------------------------------------------------
+model AutomationRule {
+  id             String          @id @default(uuid()) @db.Uuid
+  organizationId String          @map("organization_id") @db.Uuid
+  name           String          @db.VarChar(150)
+  description    String?         @db.VarChar(255)
+  
+  // Evento disparador: "contact.created", "pipeline.stage_changed", "form.submitted"
+  trigger        String          @db.VarChar(100)
+  
+  // Condiciones en JSONB: { "field": "type", "operator": "equals", "value": "PERSON" }
+  conditions     Json?
+  
+  // Acciones en JSONB: [ { "type": "send_webhook", "config": { "url": "https://api.com", "secret": "key" } } ]
+  actions        Json
+  
+  isActive       Boolean         @default(true) @map("is_active")
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime        @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  logs           AutomationLog[]
+
+  @@index([organizationId, trigger])
+  @@map("automation_rules")
+}
+
+// -------------------------------------------------------------
+// Registro / Log de Ejecución de Automatizaciones
+// -------------------------------------------------------------
+model AutomationLog {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @map("organization_id") @db.Uuid
+  ruleId         String         @map("rule_id") @db.Uuid
+  
+  eventPayload   Json           @map("event_payload")
+  status         String         @db.VarChar(30) // "success", "failed"
+  error          String?        @db.Text
+  
+  executedAt     DateTime       @default(now()) @map("executed_at") @db.Timestamptz
+
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  rule           AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([ruleId])
+  @@map("automation_logs")
 }
