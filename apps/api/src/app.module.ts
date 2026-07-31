@@ -18,6 +18,7 @@ import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { StorageModule } from './modules/storage/storage.module';
 import { EmailModule } from './modules/email/email.module';
+import { DataExportModule } from './modules/data-export/data-export.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { EmailModule } from './modules/email/email.module';
     AuthModule,
     StorageModule,
     EmailModule,
+    DataExportModule,
   ],
   controllers: [AppController],
   providers: [AppService],

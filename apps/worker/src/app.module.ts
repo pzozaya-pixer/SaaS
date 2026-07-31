@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { WebhookProcessor } from './processors/webhook.processor';
 import { EmailProcessor } from './processors/email.processor';
+import { DataExportProcessor } from './processors/data-export.processor';
 import { PrismaService } from './database/prisma.service';
 
 @Module({
@@ -13,6 +14,6 @@ import { PrismaService } from './database/prisma.service';
       },
     }),
   ],
-  providers: [WebhookProcessor, EmailProcessor, PrismaService],
+  providers: [WebhookProcessor, EmailProcessor, DataExportProcessor, PrismaService],
 })
 export class AppModule {}
