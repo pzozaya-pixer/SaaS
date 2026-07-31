@@ -13,6 +13,7 @@ import { DashboardsModule } from './modules/dashboards/dashboards.module';
 import { PluginsModule } from './modules/plugins/plugins.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { AutomationModule } from './modules/automation/automation.module';
+import { PublicApiModule } from './modules/public-api/public-api.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { AutomationModule } from './modules/automation/automation.module';
     PluginsModule,
     BillingModule,
     AutomationModule,
+    PublicApiModule,
   ],
   controllers: [AppController],
   providers: [AppService],

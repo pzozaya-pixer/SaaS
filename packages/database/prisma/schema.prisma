@@ -68,6 +68,7 @@ model Organization {
   usageRecords            UsageRecord[]
   automationRules         AutomationRule[]
   automationLogs          AutomationLog[]
+  apiKeys                 ApiKey[]
 
   @@map("organizations")
 }
@@ -808,4 +809,29 @@ model AutomationLog {
   @@index([organizationId])
   @@index([ruleId])
   @@map("automation_logs")
+}
+
+// =============================================================
+// MODELOS DE LA FASE 11: API PÚBLICA Y LLAVES DE ACCESO
+// =============================================================
+
+model ApiKey {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  name           String       @db.VarChar(100) // ej: "Integración Zapier"
+  
+  // Hash SHA256 de la llave de API para almacenamiento seguro
+  hashedKey      String       @unique @map("hashed_key") @db.VarChar(64)
+  // Prefijo visible para auditoría (ej: "saas_live_abc123")
+  keyPrefix      String       @map("key_prefix") @db.VarChar(20)
+  
+  isActive       Boolean      @default(true) @map("is_active")
+  expiresAt      DateTime?    @map("expires_at") @db.Timestamptz
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("api_keys")
 }
