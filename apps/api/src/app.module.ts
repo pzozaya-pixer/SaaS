@@ -16,6 +16,7 @@ import { AutomationModule } from './modules/automation/automation.module';
 import { PublicApiModule } from './modules/public-api/public-api.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { StorageModule } from './modules/storage/storage.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { AuthModule } from './modules/auth/auth.module';
     PublicApiModule,
     AuditModule,
     AuthModule,
+    StorageModule,
   ],
   controllers: [AppController],
   providers: [AppService],
