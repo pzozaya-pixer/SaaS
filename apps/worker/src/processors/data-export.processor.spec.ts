@@ -2,6 +2,14 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { DataExportProcessor } from './data-export.processor';
 import { PrismaService } from '../database/prisma.service';
 
+jest.mock('ioredis', () => {
+  return jest.fn().mockImplementation(() => {
+    return {
+      publish: jest.fn().mockResolvedValue(1),
+    };
+  });
+});
+
 describe('DataExportProcessor (Background Worker)', () => {
   let processor: DataExportProcessor;
   let prisma: PrismaService;

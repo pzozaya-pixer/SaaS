@@ -3,6 +3,7 @@ import { Job } from 'bullmq';
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import Redis from 'ioredis';
 
 @Processor('data-jobs')
 @Injectable()
@@ -10,6 +11,7 @@ export class DataExportProcessor extends WorkerHost {
   private readonly logger = new Logger(DataExportProcessor.name);
   private s3Client: S3Client;
   private bucketName: string;
+  private redisPublisher: Redis;
 
   constructor(private readonly prisma: PrismaService) {
     super();
@@ -22,6 +24,10 @@ export class DataExportProcessor extends WorkerHost {
         secretAccessKey: process.env.MINIO_SECRET_KEY || 'minio_secure_password',
       },
       forcePathStyle: true,
+    });
+    this.redisPublisher = new Redis({
+      host: process.env.REDIS_HOST || 'localhost',
+      port: parseInt(process.env.REDIS_PORT || '6379', 10),
     });
   }
 
@@ -64,6 +70,19 @@ export class DataExportProcessor extends WorkerHost {
         }),
       );
 
+      // Publicar notificación de finalización de exportación en Redis Pub/Sub
+      await this.redisPublisher.publish(
+        'saas:notifications',
+        JSON.stringify({
+          organizationId,
+          event: 'export.completed',
+          data: {
+            jobId: job.id,
+            key,
+          },
+        }),
+      );
+
       this.logger.log(`Contacts export finished successfully. Key: ${key}`);
       return { success: true, key };
     }
@@ -71,7 +90,6 @@ export class DataExportProcessor extends WorkerHost {
     if (job.name === 'import_contacts') {
       const { fileKey } = job.data;
 
-      // 1. Descargar el archivo temporal desde S3/MinIO
       const response = await this.s3Client.send(
         new GetObjectCommand({
           Bucket: this.bucketName,
@@ -84,7 +102,6 @@ export class DataExportProcessor extends WorkerHost {
         throw new Error(`CSV file body is empty for key: ${fileKey}`);
       }
 
-      // 2. Parsear el archivo línea por línea
       const lines = csvContent.split(/\r?\n/).filter(line => line.trim().length > 0);
       if (lines.length <= 1) {
         return { success: true, importedCount: 0, skippedCount: 0, errors: [] };
@@ -106,7 +123,6 @@ export class DataExportProcessor extends WorkerHost {
         const rowNum = i + 1;
         const line = lines[i];
 
-        // Parseador simple de CSV que maneja comillas dobles opcionales
         const values = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => v.trim().replace(/^"|"$/g, '').replace(/""/g, '"'));
 
         const type = typeIdx !== -1 ? values[typeIdx] : 'PERSON';
@@ -116,7 +132,6 @@ export class DataExportProcessor extends WorkerHost {
         const email = emailIdx !== -1 ? values[emailIdx] : '';
         const phone = phoneIdx !== -1 ? values[phoneIdx] : '';
 
-        // Validaciones
         if (!type || (type !== 'PERSON' && type !== 'COMPANY')) {
           errors.push({ row: rowNum, message: `Type must be PERSON or COMPANY (received: "${type}")` });
           skippedCount++;
@@ -171,7 +186,6 @@ export class DataExportProcessor extends WorkerHost {
         }
       }
 
-      // 3. Eliminar el archivo temporal de MinIO
       try {
         await this.s3Client.send(
           new DeleteObjectCommand({
@@ -182,6 +196,21 @@ export class DataExportProcessor extends WorkerHost {
       } catch (delErr) {
         this.logger.error(`Failed to delete temporary S3 file ${fileKey}:`, delErr);
       }
+
+      // Publicar notificación de finalización de importación en Redis Pub/Sub
+      await this.redisPublisher.publish(
+        'saas:notifications',
+        JSON.stringify({
+          organizationId,
+          event: 'import.completed',
+          data: {
+            jobId: job.id,
+            importedCount,
+            skippedCount,
+            errors,
+          },
+        }),
+      );
 
       return {
         success: true,
