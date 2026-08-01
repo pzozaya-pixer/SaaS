@@ -53,6 +53,65 @@ services:
       timeout: 5s
       retries: 5
 
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: api
+    container_name: saas_api
+    restart: always
+    ports:
+      - "4000:4000"
+    environment:
+      - DATABASE_URL=postgresql://saas_admin:saas_secure_password@postgres:5432/saas_dev?schema=public
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=super_secret_jwt_key_signature_must_be_long
+      - S3_ENDPOINT=http://minio:9000
+      - S3_ACCESS_KEY=minio_admin
+      - S3_SECRET_KEY=minio_secure_password
+      - S3_BUCKET=saas-attachments
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: worker
+    container_name: saas_worker
+    restart: always
+    environment:
+      - DATABASE_URL=postgresql://saas_admin:saas_secure_password@postgres:5432/saas_dev?schema=public
+      - REDIS_URL=redis://redis:6379
+      - S3_ENDPOINT=http://minio:9000
+      - S3_ACCESS_KEY=minio_admin
+      - S3_SECRET_KEY=minio_secure_password
+      - S3_BUCKET=saas-attachments
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: web
+    container_name: saas_web
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:4000
+    depends_on:
+      - api
+
 volumes:
   pgdata:
     driver: local
