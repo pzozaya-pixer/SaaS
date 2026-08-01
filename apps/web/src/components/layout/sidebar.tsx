@@ -1,5 +1,6 @@
 import React from 'react';
 import { LayoutDashboard, Users, PawPrint, CalendarDays, Blocks, CreditCard, Sparkles, Shield, Zap, HardDrive, FileText, Mail, Database } from 'lucide-react';
+import { useTranslation } from '../../hooks/useTranslation';
 
 interface SidebarProps {
   activeTab: string;
@@ -8,6 +9,8 @@ interface SidebarProps {
 }
 
 export function Sidebar({ activeTab, setActiveTab, petResidenceActive }: SidebarProps) {
+  const { t } = useTranslation();
+
   return (
     <aside className="w-64 border-r border-slate-800 bg-slate-950 flex flex-col justify-between h-screen sticky top-0">
       <div className="flex flex-col gap-6 p-6">
@@ -24,7 +27,7 @@ export function Sidebar({ activeTab, setActiveTab, petResidenceActive }: Sidebar
 
         {/* MENÚ DE SECCIONES */}
         <div className="flex flex-col gap-1">
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-3 mb-2">General</span>
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-3 mb-2">{t("nav.general")}</span>
           
           <button
             onClick={() => setActiveTab('dashboard')}
@@ -35,7 +38,7 @@ export function Sidebar({ activeTab, setActiveTab, petResidenceActive }: Sidebar
             }`}
           >
             <LayoutDashboard className="w-4 h-4" />
-            <span>Dashboard</span>
+            <span>{t("nav.dashboard")}</span>
           </button>
 
           <button
@@ -47,7 +50,7 @@ export function Sidebar({ activeTab, setActiveTab, petResidenceActive }: Sidebar
             }`}
           >
             <Users className="w-4 h-4" />
-            <span>CRM Contactos</span>
+            <span>{t("nav.crm")}</span>
           </button>
 
           <button
@@ -59,7 +62,7 @@ export function Sidebar({ activeTab, setActiveTab, petResidenceActive }: Sidebar
             }`}
           >
             <HardDrive className="w-4 h-4" />
-            <span>Archivos y Adjuntos</span>
+            <span>{t("nav.files")}</span>
           </button>
 
           <button
@@ -71,7 +74,7 @@ export function Sidebar({ activeTab, setActiveTab, petResidenceActive }: Sidebar
             }`}
           >
             <FileText className="w-4 h-4" />
-            <span>Formularios</span>
+            <span>{t("nav.forms")}</span>
           </button>
 
           <button
@@ -83,7 +86,7 @@ export function Sidebar({ activeTab, setActiveTab, petResidenceActive }: Sidebar
             }`}
           >
             <Users className="w-4 h-4" />
-            <span>Usuarios y Roles</span>
+            <span>{t("nav.users")}</span>
           </button>
 
           <button
@@ -95,7 +98,7 @@ export function Sidebar({ activeTab, setActiveTab, petResidenceActive }: Sidebar
             }`}
           >
             <Mail className="w-4 h-4" />
-            <span>Monitoreo de Correos</span>
+            <span>{t("nav.emails")}</span>
           </button>
 
           <button
@@ -107,7 +110,7 @@ export function Sidebar({ activeTab, setActiveTab, petResidenceActive }: Sidebar
             }`}
           >
             <Database className="w-4 h-4" />
-            <span>Campos Personalizados</span>
+            <span>{t("nav.customfields")}</span>
           </button>
 
           {/* MENÚ CONDICIONAL POR PLUGINS */}

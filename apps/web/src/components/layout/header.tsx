@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Palette, Bell, X, Download, CheckCircle, AlertCircle } from 'lucide-react';
+import { Palette, Bell, X, Download, CheckCircle, AlertCircle, Globe } from 'lucide-react';
 import { io } from 'socket.io-client';
+import { useTranslation } from '../../hooks/useTranslation';
 
 interface HeaderProps {
   primaryColor: string;
@@ -12,6 +13,7 @@ interface HeaderProps {
 export function Header({ primaryColor, setPrimaryColor, secondaryColor, setSecondaryColor }: HeaderProps) {
   const [toasts, setToasts] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const { locale, changeLanguage } = useTranslation();
 
   useEffect(() => {
     // Leer token de localStorage (o mock por defecto)
@@ -88,6 +90,19 @@ export function Header({ primaryColor, setPrimaryColor, secondaryColor, setSecon
         </div>
 
         <div className="flex items-center gap-6">
+          {/* SELECTOR DE IDIOMA */}
+          <div className="flex items-center gap-2 bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-800 text-xs">
+            <Globe className="w-3.5 h-3.5 text-slate-400" />
+            <select
+              value={locale}
+              onChange={(e) => changeLanguage(e.target.value as 'es' | 'en')}
+              className="bg-transparent text-slate-300 font-semibold focus:outline-none cursor-pointer"
+            >
+              <option value="es" className="bg-slate-950 text-slate-300">ES (Español)</option>
+              <option value="en" className="bg-slate-950 text-slate-300">EN (English)</option>
+            </select>
+          </div>
+
           {/* SELECTOR DE COLORES CORPORATIVOS (Fase 2 & 18: White-labeling dinámico) */}
           <div className="flex items-center gap-3 bg-slate-900 px-4 py-2 rounded-xl border border-slate-800 text-xs">
             <Palette className="w-4 h-4 text-slate-400" />

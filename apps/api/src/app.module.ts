@@ -21,9 +21,11 @@ import { EmailModule } from './modules/email/email.module';
 import { DataExportModule } from './modules/data-export/data-export.module';
 import { DataImportModule } from './modules/data-import/data-import.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { I18nModule } from './common/i18n/i18n.module';
 
 @Module({
   imports: [
+    I18nModule,
     DatabaseModule,
     CentersModule,
     ContactsModule,

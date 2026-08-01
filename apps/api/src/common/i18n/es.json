@@ -1,0 +1,9 @@
+{
+  "error.unauthorized": "No autorizado. Sesión inválida o expirada.",
+  "error.forbidden": "Acceso denegado. Permisos insuficientes.",
+  "error.not_found": "El recurso solicitado no existe.",
+  "error.limit_exceeded": "Límite de cuota del plan superado.",
+  "success.created": "Recurso creado exitosamente.",
+  "success.updated": "Recurso actualizado exitosamente.",
+  "success.deleted": "Recurso eliminado exitosamente."
+}

@@ -1,0 +1,9 @@
+{
+  "error.unauthorized": "Unauthorized. Invalid or expired session.",
+  "error.forbidden": "Access denied. Insufficient permissions.",
+  "error.not_found": "The requested resource does not exist.",
+  "error.limit_exceeded": "Plan quota limit exceeded.",
+  "success.created": "Resource created successfully.",
+  "success.updated": "Resource updated successfully.",
+  "success.deleted": "Resource deleted successfully."
+}
