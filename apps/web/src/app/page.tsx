@@ -14,10 +14,11 @@ import { AutomationsPanel } from '../components/automations/automations-panel';
 import { StoragePanel } from '../components/storage/storage-panel';
 import { FormsPanel } from '../components/forms/forms-panel';
 import { UsersPanel } from '../components/users/users-panel';
+import { EmailPanel } from '../components/email/email-panel';
 import { useTenantTheme } from '../hooks/useTenantTheme';
 
 export default function SaaSAdminPanel() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'crm' | 'pets' | 'kanban' | 'plugins' | 'billing' | 'security' | 'automations' | 'files' | 'forms' | 'users'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'crm' | 'pets' | 'kanban' | 'plugins' | 'billing' | 'security' | 'automations' | 'files' | 'forms' | 'users' | 'emails'>('dashboard');
   
   // Colores corporativos (Fase 2 & 18: White-labeling dinámico)
   const [primaryColor, setPrimaryColor] = useState('#0f172a');
@@ -54,7 +55,9 @@ export default function SaaSAdminPanel() {
           {activeTab === 'crm' && <ContactsList />}
           {activeTab === 'pets' && petResidenceActive && <PetsList />}
           {activeTab === 'kanban' && petResidenceActive && <KanbanBoard />}
-          {activeTab === 'plugins' && (
+          {activeTab === (
+            'plugins'
+          ) && (
             <Marketplace
               petResidenceActive={petResidenceActive}
               setPetResidenceActive={() => {}}
@@ -66,6 +69,7 @@ export default function SaaSAdminPanel() {
           {activeTab === 'files' && <StoragePanel />}
           {activeTab === 'forms' && <FormsPanel />}
           {activeTab === 'users' && <UsersPanel />}
+          {activeTab === 'emails' && <EmailPanel />}
         </main>
 
         <footer className="border-t border-slate-800 bg-slate-950/40 py-6 text-center text-xs text-slate-500">
