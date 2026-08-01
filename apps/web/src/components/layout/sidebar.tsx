@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Users, PawPrint, CalendarDays, Blocks, CreditCard, Sparkles, Shield, Zap, HardDrive, FileText, Mail } from 'lucide-react';
+import { LayoutDashboard, Users, PawPrint, CalendarDays, Blocks, CreditCard, Sparkles, Shield, Zap, HardDrive, FileText, Mail, Database } from 'lucide-react';
 
 interface SidebarProps {
   activeTab: string;
@@ -96,6 +96,18 @@ export function Sidebar({ activeTab, setActiveTab, petResidenceActive }: Sidebar
           >
             <Mail className="w-4 h-4" />
             <span>Monitoreo de Correos</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('customfields')}
+            className={`flex items-center gap-3 w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+              activeTab === 'customfields'
+                ? 'bg-primary text-primary-foreground shadow-md shadow-primary/10'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/50'
+            }`}
+          >
+            <Database className="w-4 h-4" />
+            <span>Campos Personalizados</span>
           </button>
 
           {/* MENÚ CONDICIONAL POR PLUGINS */}
