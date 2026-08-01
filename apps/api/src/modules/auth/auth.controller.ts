@@ -38,6 +38,30 @@ export class AuthController {
       throw new UnauthorizedException('Missing token');
     }
     const token = authHeader.substring(7);
-    return this.authService.validateSession(token);
+    const session = await this.authService.validateSession(token);
+    const is2fa = this.authService.is2FAEnabled(session.userId);
+    return { ...session, is2FAEnabled: is2fa };
+  }
+
+  @Post('2fa/generate')
+  async generate2FA(@Req() req: Request) {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      throw new UnauthorizedException('Missing token');
+    }
+    const token = authHeader.substring(7);
+    const session = await this.authService.validateSession(token);
+    return this.authService.generate2FASecret(session.userId);
+  }
+
+  @Post('2fa/turn-on')
+  async turnOn2FA(@Req() req: Request, @Body('code') code: string) {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      throw new UnauthorizedException('Missing token');
+    }
+    const token = authHeader.substring(7);
+    const session = await this.authService.validateSession(token);
+    return this.authService.turnOn2FA(session.userId, code);
   }
 }

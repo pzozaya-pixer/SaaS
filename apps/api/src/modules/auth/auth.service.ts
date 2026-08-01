@@ -3,10 +3,14 @@ import { PrismaService } from '../database/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { EmailService } from '../email/email.service';
+import { generateTOTPSecret, verifyTOTP } from './utils/totp';
 import * as crypto from 'crypto';
 
 @Injectable()
 export class AuthService {
+  private readonly active2FASecrets = new Map<string, string>();
+  private readonly temp2FASecrets = new Map<string, string>();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
@@ -216,5 +220,29 @@ export class AuthService {
       organizationId: activeOrgId,
       sessionId: session.id,
     };
+  }
+
+  async generate2FASecret(userId: string) {
+    const { secret, qrCodeUrl } = generateTOTPSecret();
+    this.temp2FASecrets.set(userId, secret);
+    return { secret, qrCodeUrl };
+  }
+
+  async turnOn2FA(userId: string, token: string) {
+    const tempSecret = this.temp2FASecrets.get(userId);
+    if (!tempSecret) {
+      throw new UnauthorizedException('No 2FA setup in progress');
+    }
+    const isValid = verifyTOTP(token, tempSecret);
+    if (!isValid) {
+      throw new UnauthorizedException('Invalid 2FA token code');
+    }
+    this.active2FASecrets.set(userId, tempSecret);
+    this.temp2FASecrets.delete(userId);
+    return { success: true };
+  }
+
+  is2FAEnabled(userId: string): boolean {
+    return this.active2FASecrets.has(userId);
   }
 }
