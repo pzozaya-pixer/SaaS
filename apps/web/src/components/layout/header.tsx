@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Palette, Bell, X, Download, CheckCircle, AlertCircle, Globe } from 'lucide-react';
+import { Palette, Bell, X, Download, CheckCircle, AlertCircle, Globe, Search } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { useTranslation } from '../../hooks/useTranslation';
 
@@ -14,6 +14,54 @@ export function Header({ primaryColor, setPrimaryColor, secondaryColor, setSecon
   const [toasts, setToasts] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const { locale, changeLanguage } = useTranslation();
+
+  // Estados de Búsqueda Global
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [searchTimeout, setSearchTimeout] = useState<any>(null);
+
+  const handleSearchChange = (val: string) => {
+    setSearchQuery(val);
+    if (searchTimeout) clearTimeout(searchTimeout);
+
+    if (!val.trim()) {
+      setSearchResults([]);
+      setShowDropdown(false);
+      return;
+    }
+
+    const timeout = setTimeout(async () => {
+      try {
+        const token = localStorage.getItem('token') || 'mock-session-token-32-chars-long';
+        const res = await fetch(`http://localhost:4000/api/v1/search?q=${encodeURIComponent(val)}`, {
+          headers: {
+            'x-organization-id': 'org-1',
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setSearchResults(data);
+          setShowDropdown(true);
+        }
+      } catch (err) {
+        console.error(err);
+        setSearchResults([
+          { id: 'mock-1', type: 'contact', title: `${val} (Simulado)`, subtitle: 'pepper@stark.com', badge: 'CRM Contact' },
+        ]);
+        setShowDropdown(true);
+      }
+    }, 300);
+
+    setSearchTimeout(timeout);
+  };
+
+  const handleResultClick = (item: any) => {
+    alert(`Accediendo al registro: [${item.badge}] ${item.title}`);
+    setShowDropdown(false);
+    setSearchQuery('');
+  };
 
   useEffect(() => {
     // Leer token de localStorage (o mock por defecto)
@@ -82,11 +130,48 @@ export function Header({ primaryColor, setPrimaryColor, secondaryColor, setSecon
   return (
     <>
       <header className="border-b border-slate-800 bg-slate-950/70 backdrop-blur-md sticky top-0 z-50 px-8 py-4 flex items-center justify-between">
-        <div>
-          <h1 className="text-md font-semibold text-slate-200">Panel de Administración</h1>
-          <p className="text-xs text-slate-400">
-            Organización: <span className="text-secondary font-medium">PetResidence S.L.</span>
-          </p>
+        <div className="flex items-center gap-8">
+          <div>
+            <h1 className="text-md font-semibold text-slate-200">Panel de Administración</h1>
+            <p className="text-xs text-slate-400">
+              Organización: <span className="text-secondary font-medium">PetResidence S.L.</span>
+            </p>
+          </div>
+
+          {/* BUSCADOR GLOBAL */}
+          <div className="relative w-72 hidden md:block">
+            <div className="relative">
+              <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
+              <input
+                type="text"
+                placeholder="Buscar contactos o reservas..."
+                value={searchQuery}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-850 focus:border-slate-700 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-200 focus:outline-none transition-all"
+              />
+            </div>
+
+            {/* DROPDOWN DE RESULTADOS */}
+            {showDropdown && searchResults.length > 0 && (
+              <div className="absolute top-full mt-2 left-0 right-0 bg-slate-950 border border-slate-800 rounded-2xl shadow-2xl p-2 max-h-64 overflow-y-auto space-y-1 z-50 animate-fade-in">
+                {searchResults.map((item) => (
+                  <div
+                    key={item.id}
+                    onClick={() => handleResultClick(item)}
+                    className="p-2 hover:bg-slate-900 rounded-xl cursor-pointer flex justify-between items-center transition"
+                  >
+                    <div>
+                      <span className="text-xs font-bold text-white block">{item.title}</span>
+                      <span className="text-[10px] text-slate-500 block">{item.subtitle}</span>
+                    </div>
+                    <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-slate-900 border border-slate-850 text-slate-400 uppercase">
+                      {item.badge}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-6">
