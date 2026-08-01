@@ -1,0 +1,54 @@
+name: Publish Docker Images to GHCR
+
+on:
+  push:
+    branches: [ main ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME_PREFIX: ghcr.io/pzozaya-pixer/saas
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Build and push API
+      - name: Build and push API Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          target: api
+          push: true
+          tags: ${{ env.IMAGE_NAME_PREFIX }}-api:latest
+
+      # Build and push WEB
+      - name: Build and push Web Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          target: web
+          push: true
+          tags: ${{ env.IMAGE_NAME_PREFIX }}-web:latest
+
+      # Build and push WORKER
+      - name: Build and push Worker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          target: worker
+          push: true
+          tags: ${{ env.IMAGE_NAME_PREFIX }}-worker:latest
