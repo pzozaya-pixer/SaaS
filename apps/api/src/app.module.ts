@@ -23,6 +23,10 @@ import { DataImportModule } from './modules/data-import/data-import.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { I18nModule } from './common/i18n/i18n.module';
 
+import { APP_INTERCEPTOR, APP_FILTER } from '@nestjs/core';
+import { TelemetryInterceptor } from './common/interceptors/telemetry.interceptor';
+import { TelemetryExceptionFilter } from './common/filters/telemetry-exception.filter';
+
 @Module({
   imports: [
     I18nModule,
@@ -48,6 +52,16 @@ import { I18nModule } from './common/i18n/i18n.module';
     NotificationsModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: TelemetryInterceptor,
+    },
+    {
+      provide: APP_FILTER,
+      useClass: TelemetryExceptionFilter,
+    },
+  ],
 })
 export class AppModule {}

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Key, Shield, Activity, Plus, Trash2, Copy, Check, Calendar, Eye, Clock, ArrowRight, Loader2 } from 'lucide-react';
+import { Key, Shield, Activity, Plus, Trash2, Copy, Check, Calendar, Eye, Clock, ArrowRight, Loader2, Cpu } from 'lucide-react';
+import { TelemetryDashboard } from './telemetry-dashboard';
 
 interface ApiKey {
   id: string;
@@ -21,7 +22,7 @@ interface AuditLog {
 }
 
 export function SecurityPanel() {
-  const [activeSubTab, setActiveSubTab] = useState<'keys' | 'audit' | 'twofactor'>('keys');
+  const [activeSubTab, setActiveSubTab] = useState<'keys' | 'audit' | 'twofactor' | 'telemetry'>('keys');
   
   // API Keys States
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
@@ -286,6 +287,13 @@ export function SecurityPanel() {
             <Shield className="w-3.5 h-3.5" />
             <span>Doble Factor (2FA)</span>
           </button>
+          <button
+            onClick={() => setActiveSubTab('telemetry')}
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold transition ${activeSubTab === 'telemetry' ? 'bg-primary text-primary-foreground' : 'text-slate-400 hover:text-slate-200'}`}
+          >
+            <Cpu className="w-3.5 h-3.5" />
+            <span>Telemetría</span>
+          </button>
         </div>
       </div>
 
@@ -542,6 +550,13 @@ export function SecurityPanel() {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* PESTAÑA: TELEMETRÍA */}
+      {activeSubTab === 'telemetry' && (
+        <div className="space-y-6 animate-fade-in">
+          <TelemetryDashboard />
         </div>
       )}
 
